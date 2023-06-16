@@ -20,13 +20,14 @@
       - php7.4-mysql
       - php7.4-curl
       - php7.4-json
+      - php7.4-xml
       - python2
       - make
       - g++
       - redis-server
       - acl
       - net-tools
-      - unzip  # Add this line to install the unzip package
+      - unzip
     state: latest
 
 - name: Copy nginx config file
@@ -62,40 +63,24 @@
     name: openssl
     state: latest
 
-- name: Install Node.js using NVM (ubuntu user)
-  become: true
-  become_user: ubuntu
-  shell: |
-    export NVM_DIR="/home/ubuntu/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    nvm install v18.14.0
-    nvm use v18.14.0
+- name: Generate self-signed SSL certificate
+  openssl_privatekey:
+    path: /etc/nginx/ssl/server.key
+    size: 2048
+    type: RSA
 
-- name: Install PM2 globally (ubuntu user)
-  become: true
-  become_user: ubuntu
-  shell: |
-    export NVM_DIR="/home/ubuntu/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    npm install pm2 -g
+- name: Generate Certificate Signing Request (CSR)
+  openssl_csr:
+    path: /etc/nginx/ssl/server.csr
+    privatekey_path: /etc/nginx/ssl/server.key
+    common_name: harw.xyz
 
-- name: Install PM2 logrotate module (ubuntu user)
-  become: true
-  become_user: ubuntu
-  shell: |
-    export NVM_DIR="/home/ubuntu/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    pm2 install pm2-logrotate
-
-- name: Configure PM2 log rotation settings (ubuntu user)
-  become: true
-  become_user: ubuntu
-  shell: |
-    export NVM_DIR="/home/ubuntu/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    pm2 set pm2-logrotate:retain 3
-    pm2 set pm2-logrotate:compress true
-    pm2 set pm2-logrotate:max_size 1M
+- name: Generate self-signed certificate from CSR
+  openssl_certificate:
+    path: /etc/nginx/ssl/server.crt
+    privatekey_path: /etc/nginx/ssl/server.key
+    csr_path: /etc/nginx/ssl/server.csr
+    provider: selfsigned
 
 - name: Restart nginx Service
   service:
@@ -107,92 +92,36 @@
     name: redis-server
     state: restarted
 
-- name: Create dbaccess directory
-  file:
-    path: "/var/www/html/dbaccess"
-    state: directory
-    owner: www-data
-    group: www-data
-    mode: '0755'
+- name: Install curl
+  apt:
+    name: curl
+    state: present
 
-- name: Download phpMyAdmin
-  get_url:
-    url: "https://files.phpmyadmin.net/phpMyAdmin/5.1.1/phpMyAdmin-5.1.1-all-languages.zip"
-    dest: "/tmp/phpMyAdmin.zip"
+- name: Install NVM (Node Version Manager) for ubuntu user
+  become: yes
+  become_user: ubuntu
+  shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-- name: Unzip phpMyAdmin
-  unarchive:
-    src: "/tmp/phpMyAdmin.zip"
-    dest: "/var/www/html/dbaccess/"
-    remote_src: yes
-    owner: www-data
-    group: www-data
+- name: Install Node.js 18.14.0 for ubuntu user
+  become: yes
+  become_user: ubuntu
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+    nvm install v18.14.0
 
-- name: Copy phpMyAdmin files to dbaccess directory
-  shell: "cp -R /var/www/html/dbaccess/phpMyAdmin-5.1.1-all-languages/* /var/www/html/dbaccess/"
-  args:
-    creates: "/var/www/html/dbaccess/config.sample.inc.php"
-  become: true
-  become_user: www-data
-
-- name: Rename config.sample.inc.php to config.inc.php
-  command: mv /var/www/html/dbaccess/config.sample.inc.php /var/www/html/dbaccess/config.inc.php
-  become: true
-  become_user: www-data
-  ignore_errors: true
-
-- name: Update MySQL configuration in config.inc.php
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['host'] = 'localhost';"
-    insertafter: '^/* Server parameters */$'
-  become: true
-  become_user: www-data
-
-- name: Update config.inc.php with MySQL configuration
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['port'] = '3306';"
-    insertafter: "$cfg['Servers'][$i]['host'] = 'localhost';"
-  become: true
-  become_user: www-data
-
-- name: Update config.inc.php with MySQL configuration
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['user'] = 'root';"
-    insertafter: "$cfg['Servers'][$i]['port'] = '3306';"
-  become: true
-  become_user: www-data
-
-- name: Update config.inc.php with MySQL configuration
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['compress'] = false;"
-    insertafter: "$cfg['Servers'][$i]['user'] = 'root';"
-  become: true
-  become_user: www-data
-
-- name: Update config.inc.php with MySQL configuration
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['password'] = '82BKJDSNG306DBoiUAWGUIFBo';"
-    insertafter: "$cfg['Servers'][$i]['compress'] = false;"
-  become: true
-  become_user: www-data
-
-- name: Update config.inc.php with MySQL configuration
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['connect_type'] = 'tcp';"
-    insertafter: "$cfg['Servers'][$i]['password'] = '82BKJDSNG306DBoiUAWGUIFBo';"
-  become: true
-  become_user: www-data
-
-- name: Update config.inc.php with MySQL configuration
-  lineinfile:
-    path: /var/www/html/dbaccess/config.inc.php
-    line: "$cfg['Servers'][$i]['extension'] = 'mysqli';"
-    insertafter: "$cfg['Servers'][$i]['connect_type'] = 'tcp';"
-  become: true
-  become_user: www-data
+- name: Install PM2 for ubuntu user
+  become: yes
+  become_user: ubuntu
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+    npm install pm2 -g
+    pm2 install pm2-logrotate
+    pm2 set pm2-logrotate:retain 3
+    pm2 set pm2-logrotate:compress true
+    pm2 set pm2-logrotate:max_size 1M
