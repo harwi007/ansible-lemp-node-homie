@@ -1,0 +1,119 @@
+---
+- name: Update apt repo and cache on all Debian/Ubuntu boxes
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Upgrade all packages on servers
+  apt:
+    upgrade: dist
+
+- name: Install required packages
+  apt:
+    name:
+      - mysql-server
+      - nginx
+      - php7.4
+      - php7.4-mbstring
+      - php7.4-fpm
+      - php7.4-cli
+      - php7.4-mysql
+      - php7.4-curl
+      - php7.4-json
+      - python2
+      - make
+      - g++
+      - redis-server
+      - acl
+      - net-tools
+    state: latest
+
+- name: Copy nginx config file
+  copy:
+    src: nginx.conf
+    dest: /etc/nginx/
+
+- name: Copy nginx default file
+  copy:
+    src: default
+    dest: /etc/nginx/sites-available
+
+- name: Copy PHP configuration files
+  copy:
+    src: "{{ item }}"
+    dest: /etc/php/7.4/fpm/
+  with_items:
+    - php.ini
+    - www.conf
+- name: Copy MySQL configuration file
+  copy:
+    src: mysqld.cnf
+    dest: /etc/mysql/mysql.conf.d/
+
+- name: Create SSL directory
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+
+- name: Install OpenSSL package
+  apt:
+    name: openssl
+    state: latest
+
+- name: Generate self-signed SSL certificate
+  openssl_privatekey:
+    path: /etc/nginx/ssl/server.key
+    size: 2048
+    type: RSA
+
+- name: Generate Certificate Signing Request (CSR)
+  openssl_csr:
+    path: /etc/nginx/ssl/server.csr
+    privatekey_path: /etc/nginx/ssl/server.key
+    common_name: harw.xyz
+
+- name: Generate self-signed certificate from CSR
+  openssl_certificate:
+    path: /etc/nginx/ssl/server.crt
+    privatekey_path: /etc/nginx/ssl/server.key
+    csr_path: /etc/nginx/ssl/server.csr
+    provider: selfsigned
+
+- name: Restart nginx Service
+  service:
+    name: nginx
+    state: restarted
+
+- name: Install Node.js using NVM
+  become: yes
+  become_user: ubuntu
+  shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+    source ~/.bashrc
+    nvm install v18.14.0
+    nvm use v18.14.0
+
+- name: Install PM2 globally
+  become: yes
+  become_user: ubuntu
+  shell: |
+    npm install pm2 -g
+
+- name: Install PM2 logrotate module
+  become: yes
+  become_user: ubuntu
+  shell: |
+    pm2 install pm2-logrotate
+
+- name: Configure PM2 log rotation settings
+  become: yes
+  become_user: ubuntu
+  shell: |
+    pm2 set pm2-logrotate:retain 3
+    pm2 set pm2-logrotate:compress true
+    pm2 set pm2-logrotate:max_size 1M
+
+- name: Restart redis-server Service
+  service:
+    name: redis-server
+    state: restarted
