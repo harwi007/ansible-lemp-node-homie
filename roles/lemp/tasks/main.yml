@@ -125,3 +125,84 @@
     pm2 set pm2-logrotate:retain 3
     pm2 set pm2-logrotate:compress true
     pm2 set pm2-logrotate:max_size 1M
+
+- name: Create dbaccess directory
+  file:
+    path: "/var/www/html/dbaccess"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Download phpMyAdmin
+  get_url:
+    url: "https://files.phpmyadmin.net/phpMyAdmin/5.1.1/phpMyAdmin-5.1.1-all-languages.zip"
+    dest: "/tmp/phpMyAdmin.zip"
+
+- name: Unzip phpMyAdmin
+  unarchive:
+    src: "/tmp/phpMyAdmin.zip"
+    dest: "/var/www/html/dbaccess/"
+    remote_src: yes
+    owner: www-data
+    group: www-data
+
+- name: Copy phpMyAdmin files to dbaccess directory
+  shell: "cp -R /var/www/html/dbaccess/phpMyAdmin-5.1.1-all-languages/* /var/www/html/dbaccess/"
+  args:
+    creates: "/var/www/html/dbaccess/config.sample.inc.php"
+  become: yes
+
+- name: Rename config.sample.inc.php to config.inc.php
+  command: mv /var/www/html/dbaccess/config.sample.inc.php /var/www/html/dbaccess/config.inc.php
+  become: yes
+  ignore_errors: yes
+
+- name: Update MySQL configuration in config.inc.php
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['host'] = 'localhost';"
+    insertafter: '^/* Server parameters */$'
+  become: yes
+
+- name: Update config.inc.php with MySQL configuration
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['port'] = '3306';"
+    insertafter: "$cfg['Servers'][$i]['host'] = 'localhost';"
+  become: yes
+
+- name: Update config.inc.php with MySQL configuration
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['user'] = 'root';"
+    insertafter: "$cfg['Servers'][$i]['port'] = '3306';"
+  become: yes
+
+- name: Update config.inc.php with MySQL configuration
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['compress'] = false;"
+    insertafter: "$cfg['Servers'][$i]['user'] = 'root';"
+  become: yes
+
+- name: Update config.inc.php with MySQL configuration
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['password'] = '82BKJDSNG306DBoiUAWGUIFBo';"
+    insertafter: "$cfg['Servers'][$i]['compress'] = false;"
+  become: yes
+
+- name: Update config.inc.php with MySQL configuration
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['connect_type'] = 'tcp';"
+    insertafter: "$cfg['Servers'][$i]['password'] = '82BKJDSNG306DBoiUAWGUIFBo';"
+  become: yes
+
+- name: Update config.inc.php with MySQL configuration
+  lineinfile:
+    path: /var/www/html/dbaccess/config.inc.php
+    line: "$cfg['Servers'][$i]['extension'] = 'mysqli';"
+    insertafter: "$cfg['Servers'][$i]['connect_type'] = 'tcp';"
+  become: yes
